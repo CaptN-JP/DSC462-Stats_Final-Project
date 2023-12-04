@@ -1,6 +1,7 @@
 # Import required libraries
 library(ggplot2)
 library(moments)
+library(RColorBrewer)
 
 #' Expand Nested Categorical Data
 #'
@@ -326,24 +327,83 @@ process_episode_data <- function(df, min_lim, max_lim) {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-sample_funtion_syntax <- function(data)
-  #---- Function Description ----#
-  # 
+#' Compare Box Plot
+#'
+#' Generate a side-by-side box plot for comparing the distribution of a numeric column
+#' (\code{y_col}) across different categories in a factor column (\code{fill_column}).
+#' Optionally, you can specify the categories to include, set a custom y-axis limit,
+#' and customize the y-axis label and plot title.
+#'
+#' @param data A data frame containing the relevant columns.
+#' @param y_col The name of the numeric column to be plotted on the y-axis.
+#' @param fill_column The name of the factor column defining the categories for comparison.
+#' @param categories A vector containing the specific categories to include in the plot. 
+#'                   If \code{NULL}, the top categories from \code{fill_column} will be used.
+#' @param ylim A numeric vector of length 2 specifying the y-axis limits. 
+#'             Default is \code{NULL}, resulting in automatic scaling.
+#' @param y_label The label for the y-axis. Default is "Y Column data".
+#' @param title The title for the plot. Default is "Box Plot".
+#'
+#' @return A box plot visualizing the distribution of \code{y_col} across categories.
+#'
+#' @examples
+#' # Example usage:
+#' compare_box_plot(data = your_data_frame, y_col = "popularity", fill_column = "type",
+#'                  categories = c("Scripted", "MiniSeries"), ylim = c(0, 10),
+#'                  y_label = "Popularity", title = "Comparison of Popularity")
+#'
+#' @export
+compare_box_plot <- function(data, y_col, fill_column, categories = NULL, ylim = NULL, 
+                             y_label = "Y Column data", title = "Box Plot") {
   
-  #---- Arguments ----#
-  # 
+  # Check if the specified columns exist in the data frame
+  stopifnot(y_col %in% names(data) && fill_column %in% names(data))
   
-{ # Function definition starts
+  # Check data type of the specified columns
+  stopifnot(is.numeric(data[[y_col]]))
   
+  # Convert fill_column to factor
+  data[[fill_column]] <- as.factor(data[[fill_column]])
   
-} # Function definition ends
+  # Remove rows with missing values in the specified columns
+  data <- na.omit(data, cols = c(y_col, fill_column))
+  
+  # Handle categories with fewer than three values
+  if (!is.null(categories)) {
+#    if (length(unique(categories)) < 3) {
+#      stop("categories must contain at least three unique values.")
+    
+    if (length(categories) > 0 && length(categories) < 3) {
+      # Update categories with dummy string values to make its length 3
+      categories <- c(categories, rep("dummy", 3 - length(categories)))
+      warning("Categories vector has been updated with dummy values to make its length 3.")
+      }
+    
+    data <- data[data[[fill_column]] %in% categories, ]
+  } else {
+    # Select top n most frequent unique categorical values from fill_column
+    n_top_categories <- 5  # You can adjust this value as needed
+    top_categories <- names(sort(table(data[[fill_column]]), decreasing = TRUE))[1:n_top_categories]
+    data <- data[data[[fill_column]] %in% top_categories, ]
+    categories <- top_categories
+  }
+  
+  # Define color palette
+  color_palette <- setNames(brewer.pal(length(categories), "Set3"), categories)
+  
+  # Create the box plot
+  box_plot <- ggplot(data, aes_string(x = fill_column, y = y_col, fill = fill_column)) +
+    geom_boxplot(position = "dodge") +
+    labs(x = fill_column, y = y_label, title = title) +
+    scale_fill_manual(values = color_palette) +
+    theme_minimal()
+  
+  # Set custom ylim if specified
+  if (!is.null(ylim)) {
+    box_plot <- box_plot + coord_cartesian(ylim = ylim)
+  }
+  
+  print(box_plot)
+  file_name <- paste("box_plots/", gsub(" ", "_", title), ".png", sep="")
+  ggsave(file_name, plot = box_plot, width = 8, height = 6, units = "in", dpi = 300)
+}

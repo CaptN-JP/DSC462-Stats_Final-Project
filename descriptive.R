@@ -215,5 +215,25 @@ display_scatter_plot(
   ylim = c(0, 10)
   )
 
+### BOX PLOTS ###
 
-#----> Vote average vs Popularity <----
+df3 <- tmdb_data[tmdb_data$production_countries == "United Kingdom", ]
+
+compare_box_plot(
+  data = df3, 
+  fill_column = "type",
+  categories = c("Scripted", "Miniseries", "Reality"),
+  y_col = "popularity", 
+  y_label = "Popularity", 
+  title = "Box plot of average votes of a scripted TV series with popularity",
+  ylim = c(0, 10)
+)
+# , "Miniseries", "Reality"
+compare_box_plot(
+  data = df3, 
+  fill_column = "type",
+  y_col = "popularity", 
+  y_label = "Popularity", 
+  title = "Box plot of average votes of a scripted TV series with popularity",
+  ylim = c(0, 20)
+)
