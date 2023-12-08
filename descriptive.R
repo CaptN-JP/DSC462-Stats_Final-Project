@@ -4,6 +4,8 @@ source("./utils.R")
 
 # Import the dataset
 tmdb_data <- read.csv("TMDB_tv_dataset_v3.csv", header = TRUE)
+# Remove all the unnecessary columns: id, overview, poster_path, backdrop_path, homepage, imdb_id, created_by and tagline
+tmdb_data <- tmdb_data[, -c(1, 3, 4, 5, 6, 7, 8, 9, 10)]
 summary(tmdb_data)
 
 ## Create a duration_column
@@ -222,7 +224,7 @@ display_scatter_plot(
 
 df3 <- tmdb_data[tmdb_data$production_countries == "United Kingdom", ]
 
-compare_box_plot(
+generate_box_plot(
   data = df3, 
   fill_column = "type",
   categories = c("Scripted", "Miniseries", "Reality"),
@@ -231,10 +233,18 @@ compare_box_plot(
   title = "Box plot of average votes of a scripted TV series with popularity",
   ylim = c(0, 10)
 )
-# , "Miniseries", "Reality"
-compare_box_plot(
+# When fill_column is not specified, the box plot is generated for all the categories
+generate_box_plot(
   data = df3, 
   fill_column = "type",
+  y_col = "popularity", 
+  y_label = "Popularity", 
+  title = "Box plot of average votes of a scripted TV series with popularity",
+  ylim = c(0, 20)
+)
+# When fill_column & categories are not specified, the box plot is generated for y_col
+generate_box_plot(
+  data = tmdb_data, 
   y_col = "popularity", 
   y_label = "Popularity", 
   title = "Box plot of average votes of a scripted TV series with popularity",
@@ -249,3 +259,7 @@ generate_qq_plots(data = tmdb_data, column_name = "number_of_episodes")
 tmdb_data <- read.csv("TMDB_tv_dataset_v3.csv", header = TRUE)
 #tmdb_data <- get_duration(tmdb_data)
 transformed_col_df <- apply_boxcox_transformation(tmdb_data, "number_of_episodes")
+cat(str(transformed_col_df$transformed_number_of_episodes))
+colnames((transformed_col_df))
+
+generate_qq_plots(data = transformed_col_df, column_name = "transformed_number_of_episodes")

@@ -340,93 +340,6 @@ process_episode_data <- function(df, min_lim, max_lim) {
 }
 
 
-#' Compare Box Plot
-#'
-#' Generate a side-by-side box plot for comparing the distribution of a numeric column
-#' (\code{y_col}) across different categories in a factor column (\code{fill_column}).
-#' Optionally, you can specify the categories to include, set a custom y-axis limit,
-#' and customize the y-axis label and plot title.
-#'
-#' @param data A data frame containing the relevant columns.
-#' @param y_col The name of the numeric column to be plotted on the y-axis.
-#' @param fill_column The name of the factor column defining the categories for comparison.
-#' @param categories A vector containing the specific categories to include in the plot. 
-#'                   If \code{NULL}, the top categories from \code{fill_column} will be used.
-#' @param ylim A numeric vector of length 2 specifying the y-axis limits. 
-#'             Default is \code{NULL}, resulting in automatic scaling.
-#' @param y_label The label for the y-axis. Default is "Y Column data".
-#' @param title The title for the plot. Default is "Box Plot".
-#'
-#' @return A box plot visualizing the distribution of \code{y_col} across categories.
-#'
-#' @examples
-#' # Example usage:
-#' compare_box_plot(data = your_data_frame, y_col = "popularity", fill_column = "type",
-#'                  categories = c("Scripted", "MiniSeries"), ylim = c(0, 10),
-#'                  y_label = "Popularity", title = "Comparison of Popularity")
-#'
-#' @export
-compare_box_plot <- function(data, y_col, fill_column, categories = NULL, ylim = NULL, 
-                             y_label = "Y Column data", title = "Box Plot") {
-  
-  # Check if the specified columns exist in the data frame
-  stopifnot(y_col %in% names(data) && fill_column %in% names(data))
-  
-  # Check data type of the specified columns
-  stopifnot(is.numeric(data[[y_col]]))
-  
-  # Convert fill_column to factor
-    data[[fill_column]] <- as.factor(data[[fill_column]])
-    
-  # Remove rows with missing values in the specified columns
-  data <- na.omit(data, cols = c(y_col, fill_column))
-  
-  # Handle categories with fewer than three values
-  if (!is.null(categories)) {
-#    if (length(unique(categories)) < 3) {
-#      stop("categories must contain at least three unique values.")
-    
-    if (length(categories) > 0 && length(categories) < 3) {
-      # Update categories with dummy string values to make its length 3
-      categories <- c(categories, rep("dummy", 3 - length(categories)))
-      warning("Categories vector has been updated with dummy values to make its length 3.")
-      }
-    
-    data <- data[data[[fill_column]] %in% categories, ]
-  } else {
-    # Select top n most frequent unique categorical values from fill_column
-    n_top_categories <- 10  # You can adjust this value as needed
-    top_categories <- names(sort(table(data[[fill_column]]), decreasing = TRUE))[1:n_top_categories]
-    data <- data[data[[fill_column]] %in% top_categories, ]
-    categories <- top_categories
-  }
-  
-  # Define color palette
-  color_palette <- setNames(brewer.pal(length(categories), "Set3"), categories)
-  
-  # Create the box plot
-  box_plot <- ggplot(data, aes_string(x = fill_column, y = y_col, fill = fill_column)) +
-    geom_boxplot(position = "dodge") +
-    labs(x = fill_column, y = y_label, title = title) +
-    scale_fill_manual(values = color_palette) +
-    theme_minimal()
-  
-  # Set custom ylim if specified
-  if (!is.null(ylim)) {
-    box_plot <- box_plot + coord_cartesian(ylim = ylim)
-  }
-  
-  # Check if "box_plots/" directory exists, create if not
-  if (!dir.exists("box_plots")) {
-    dir.create("box_plots")
-  }
-  
-  print(box_plot)
-  file_name <- paste("box_plots/", gsub(" ", "_", title), ".png", sep="")
-  ggsave(file_name, plot = box_plot, width = 8, height = 6, units = "in", dpi = 300)
-}
-
-
 #' Generate QQ plots for a numeric column with both normal and uniform distributions.
 #'
 #' This function generates QQ plots for a specified numeric column in a data frame. 
@@ -502,6 +415,7 @@ get_duration <- function(data) {
   }
   
   # Remove rows where first_air_date is greater than last_air_date
+  cat("Removing rows where first_air_date is greater than last_air_date...\n")
   data <- data[data$first_air_date <= data$last_air_date, ]
   
   # Calculate the duration between the first and last air dates
@@ -555,20 +469,20 @@ apply_boxcox_transformation <- function(data, column_name) {
   lambda <- boxcox(cleaned_col_data ~ 1)$x[which.max(boxcox(cleaned_col_data ~ 1)$y)]
   
   # Print the Box-Cox transformation results
-  #cat("Lambda for optimal transformation:", lambda, "\n")
+  cat("Lambda for optimal transformation:", lambda, "\n")
   
   # Return the transformed data if needed
   transformed_data <- (cleaned_col_data^lambda - 1) / lambda
   
-  # Add a new column to the data frame with the transformed data and name it as transformed_column_name
-  #transformed_column_name <- paste(column_name, "_transformed", sep = "")
-  #data[[transformed_column_name]] <- transformed_data
-  
-  # Return the transformed data in a new data frame with the same column name
-  transformed_data <- data.frame(column_name = transformed_data)
+  # Create a new column in data and initialize it with NA
+  data[[paste0("transformed_", column_name)]] <- NA
 
-  return(transformed_data)
+  # Assign transformed_data to the rows where column_data > 0
+  data[[paste0("transformed_", column_name)]][data[[column_name]] > 0] <- as.numeric(transformed_data)
+
+  return(data)
 }
+  
 
 
 
@@ -597,4 +511,104 @@ expand_categorical_cols <- function(df, cat_col, num_col) {
                        cat_col = cat_vals)
   
   return(exp_df)
+}
+
+
+#' Generate Box Plot
+#'
+#' Generate a side-by-side box plot for comparing the distribution of a numeric column
+#' (\code{y_col}) across different categories in a factor column (\code{fill_column}).
+#' Optionally, you can specify the categories to include, set a custom y-axis limit,
+#' and customize the y-axis label and plot title.
+#'
+#' @param data A data frame containing the relevant columns.
+#' @param y_col The name of the numeric column to be plotted on the y-axis.
+#' @param fill_column The name of the factor column defining the categories for comparison.
+#'                   If \code{NULL}, then the data from \code{y_col} will be used.
+#' @param categories A vector containing the specific categories to include in the plot. 
+#'                   If \code{NULL}, the top categories from \code{fill_column} will be used.
+#' @param ylim A numeric vector of length 2 specifying the y-axis limits. 
+#'             Default is \code{NULL}, resulting in automatic scaling.
+#' @param y_label The label for the y-axis. Default is "Y Column data".
+#' @param title The title for the plot. Default is "Box Plot".
+#'
+#' @return A box plot visualizing the distribution of \code{y_col} across categories.
+#'
+#' @examples
+#' # Example usage:
+#' compare_box_plot(data = your_data_frame, y_col = "popularity", fill_column = "type",
+#'                  categories = c("Scripted", "MiniSeries"), ylim = c(0, 10),
+#'                  y_label = "Popularity", title = "Comparison of Popularity")
+#'
+#' @export
+generate_box_plot <- function(data, y_col, fill_column=NULL, categories = NULL, ylim = NULL, 
+                             y_label = "Y Column data", title = "Box Plot") {
+  
+  # Check if the specified columns exist in the data frame
+  stopifnot(y_col %in% names(data))
+  if (!is.null(fill_column)) {
+    stopifnot(fill_column %in% names(data))
+    
+    # Convert fill_column to factor
+    data[[fill_column]] <- as.factor(data[[fill_column]])
+    # Remove rows with missing values in the specified columns
+    data <- na.omit(data, cols = c(y_col, fill_column))
+  }
+  
+  # Check data type of the specified columns
+  stopifnot(is.numeric(data[[y_col]]))
+
+  # Handle categories with fewer than three values
+  if (!is.null(categories)) {
+#    if (length(unique(categories)) < 3) {
+#      stop("categories must contain at least three unique values.")
+    
+    if (length(categories) > 0 && length(categories) < 3) {
+      # Update categories with dummy string values to make its length 3
+      categories <- c(categories, rep("dummy", 3 - length(categories)))
+      warning("Categories vector has been updated with dummy values to make its length 3.")
+      }
+    
+    data <- data[data[[fill_column]] %in% categories, ]
+  } 
+  else if (!is.null(fill_column)) {
+    # Select top n most frequent unique categorical values from fill_column
+    n_top_categories <- 10  # You can adjust this value as needed
+    top_categories <- names(sort(table(data[[fill_column]]), decreasing = TRUE))[1:n_top_categories]
+    data <- data[data[[fill_column]] %in% top_categories, ]
+    categories <- top_categories
+  }
+  
+  # Define color palette
+  color_palette <- setNames(brewer.pal(length(categories), "Set3"), categories)
+  cat("Color palette:", color_palette, "\n")
+  cat(names(color_palette), "\n")
+
+  # Create the box plot
+  if (is.null(fill_column)) {
+    box_plot <- ggplot(data, aes(x = "", y = data[[y_col]], fill = y_label)) +
+    geom_boxplot() +
+    labs(x = "", y = y_label, title = title) +
+    scale_fill_manual(values = colorRampPalette(brewer.pal(3, "YlGnBu"))(5))
+  }
+  else{
+  box_plot <- ggplot(data, aes_string(x = fill_column, y = y_col, fill = fill_column)) +
+    geom_boxplot(position = "dodge") +
+    labs(x = fill_column, y = y_label, title = title) +
+    scale_fill_manual(values = color_palette) +
+    theme_minimal()
+  }
+  # Set custom ylim if specified
+  if (!is.null(ylim)) {
+    box_plot <- box_plot + coord_cartesian(ylim = ylim)
+  }
+  
+  # Check if "box_plots/" directory exists, create if not
+  if (!dir.exists("box_plots")) {
+    dir.create("box_plots")
+  }
+  
+  print(box_plot)
+  file_name <- paste("box_plots/", gsub(" ", "_", title), ".png", sep="")
+  ggsave(file_name, plot = box_plot, width = 8, height = 6, units = "in", dpi = 300)
 }
