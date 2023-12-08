@@ -1,10 +1,13 @@
-source("./utils.R")
+# Perform Exploratory Data Analysis on the TMDB TV Dataset
 
+source("./utils.R")
 
 # Import the dataset
 tmdb_data <- read.csv("TMDB_tv_dataset_v3.csv", header = TRUE)
 summary(tmdb_data)
 
+## Create a duration_column
+tmdb_data <- get_duration(tmdb_data)
 
 ### PLOTTING HISTOGRAMS(Numeric) AND BAR CHARTS(Categorical) ###
 
@@ -186,7 +189,7 @@ plot_histogram(
 cols <- c("number_of_seasons", "number_of_episodes", "vote_count", "vote_average", 
           "episode_run_time", "production_companies", "genres", "languages", "networks", 
           "origin_country", "spoken_languages", "production_countries", "original_language", 
-          "status", "adult", "in_production", "popularity", "type")
+          "status", "adult", "in_production", "popularity", "type", "duration")
 
 col_stats(cols)
 
@@ -237,3 +240,12 @@ compare_box_plot(
   title = "Box plot of average votes of a scripted TV series with popularity",
   ylim = c(0, 20)
 )
+
+
+### QQ PLOTS ###
+generate_qq_plots(data = tmdb_data, column_name = "number_of_episodes")
+
+## BOXCOX TRANSFORMATION ##
+tmdb_data <- read.csv("TMDB_tv_dataset_v3.csv", header = TRUE)
+#tmdb_data <- get_duration(tmdb_data)
+transformed_col_df <- apply_boxcox_transformation(tmdb_data, "number_of_episodes")

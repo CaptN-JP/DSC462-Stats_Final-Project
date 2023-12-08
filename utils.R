@@ -1,7 +1,9 @@
 # Import required libraries
-library(ggplot2)
-library(moments)
-library(RColorBrewer)
+library(ggplot2) # to plot and visualize data
+library(moments) # to calculate the skewness
+library(RColorBrewer) # For selecting color palette
+library(lubridate) # For handling datetime data
+library(MASS)  # for boxcox transformation
 
 #' Expand Nested Categorical Data
 #'
@@ -162,14 +164,14 @@ plot_histogram <- function(data, column_name, x_label="Data", y_label="Frequency
 #' @importFrom stats summary var sd mean skewness
 #' @importFrom base table head tail cbind
 #' @export
-col_stats <- function(cols) { 
+col_stats <- function(data, cols) { 
   
   for (col in cols) {
     cat(paste("Table for ", col, "\n"))
-    col_data <- (tmdb_data[[col]])
+    col_data <- (data[[col]])
     
     # Check if the column is numeric
-    if (is.numeric(tmdb_data[[col]])) {
+    if (is.numeric(data[[col]])) {
       cat("\nNumeric Summary:\n")
       numeric_summary <- summary(col_data)
       print(numeric_summary)
@@ -229,7 +231,7 @@ col_stats <- function(cols) {
 #' @import ggplot2
 #' @importFrom ggplot2 aes_string geom_point labs coord_fixed coord_cartesian
 #' @export
-display_scatter_plot <- function(data, x_col, y_col, equal_aspect = FALSE, xlim = NULL, ylim = NULL, x_label = "X Column data", y_label = "Y Column data", title = "Scatter Plot") {
+display_scatter_plot <- function(data, x_col, y_col, z_col=FALSE, equal_aspect = FALSE, xlim = NULL, ylim = NULL, x_label = "X Column data", y_label = "Y Column data", title = "Scatter Plot") {
   
   # Check if the specified columns exist in the data frame
   if (!all(c(x_col, y_col) %in% names(data))) {
@@ -244,9 +246,20 @@ display_scatter_plot <- function(data, x_col, y_col, equal_aspect = FALSE, xlim 
   # Remove rows with missing values in either of the columns
   data <- na.omit(data, cols = c(x_col, y_col))
   
-  scatter_plot <- ggplot(data, aes_string(x = x_col, y = y_col)) +
-    geom_point() +
-    labs(x = x_label, y = y_label, title = title)
+  if (z_col == FALSE) {
+    scatter_plot <- ggplot(data, aes_string(x = x_col, y = y_col)) +
+      geom_point() +
+      labs(x = x_label, y = y_label, title = title)  
+  }
+  else {
+    scatter_plot <- ggplot(data, aes_string(x = x_col, y = y_col, shape=z_col, color=z_col)) +
+      geom_point() +
+      #      scale_color_manual(values = c("red", "blue", "green", "yellow", "black")) +  # Add more colors as needed 
+      labs(x = x_label, y = y_label, title = title)  
+  }
+#  scatter_plot <- ggplot(data, aes_string(x = x_col, y = y_col, shape=z_col, color=z_col)) +
+#    geom_point() +
+#    labs(x = x_label, y = y_label, title = title)
   
   # Apply equal aspect ratio if specified
   if (equal_aspect) {
@@ -363,8 +376,8 @@ compare_box_plot <- function(data, y_col, fill_column, categories = NULL, ylim =
   stopifnot(is.numeric(data[[y_col]]))
   
   # Convert fill_column to factor
-  data[[fill_column]] <- as.factor(data[[fill_column]])
-  
+    data[[fill_column]] <- as.factor(data[[fill_column]])
+    
   # Remove rows with missing values in the specified columns
   data <- na.omit(data, cols = c(y_col, fill_column))
   
@@ -382,7 +395,7 @@ compare_box_plot <- function(data, y_col, fill_column, categories = NULL, ylim =
     data <- data[data[[fill_column]] %in% categories, ]
   } else {
     # Select top n most frequent unique categorical values from fill_column
-    n_top_categories <- 5  # You can adjust this value as needed
+    n_top_categories <- 10  # You can adjust this value as needed
     top_categories <- names(sort(table(data[[fill_column]]), decreasing = TRUE))[1:n_top_categories]
     data <- data[data[[fill_column]] %in% top_categories, ]
     categories <- top_categories
@@ -403,7 +416,185 @@ compare_box_plot <- function(data, y_col, fill_column, categories = NULL, ylim =
     box_plot <- box_plot + coord_cartesian(ylim = ylim)
   }
   
+  # Check if "box_plots/" directory exists, create if not
+  if (!dir.exists("box_plots")) {
+    dir.create("box_plots")
+  }
+  
   print(box_plot)
   file_name <- paste("box_plots/", gsub(" ", "_", title), ".png", sep="")
   ggsave(file_name, plot = box_plot, width = 8, height = 6, units = "in", dpi = 300)
+}
+
+
+#' Generate QQ plots for a numeric column with both normal and uniform distributions.
+#'
+#' This function generates QQ plots for a specified numeric column in a data frame. 
+#' It creates two QQ plots - one with a normal distribution and the other with a uniform distribution.
+#'
+#' @param data A data frame containing the data.
+#' @param column_name The name of the numeric column for which QQ plots are to be generated.
+#'
+#' @return NULL
+#'
+#' @examples
+#' \dontrun{
+#' # Example usage
+#' generate_qq_plots(my_data_frame, "numeric_column")
+#' }
+#'
+generate_qq_plots <- function(data, column_name) {
+  # Check if the specified column exists in the data frame
+  stopifnot(column_name %in% names(data))
+  
+  # Extract the column data
+  column_data <- data[[column_name]]
+  
+  # Check if the column data is numeric
+  stopifnot(is.numeric(column_data))
+  
+  # Check if "qq_plots/" directory exists, create if not
+  if (!dir.exists("qq_plots")) {
+    dir.create("qq_plots")
+  }
+  
+  # Create a QQ plot with a normal distribution
+  norm_qqplot_title <- paste("QQ Plot for", column_name, "with Normal Distribution")
+  norm_qqplot_file <- paste("qq_plots/", gsub(" ", "_", norm_qqplot_title), ".png", sep="")
+  png(norm_qqplot_file, width = 8, height = 6, units = "in", res = 300)
+  qqnorm(column_data, main = norm_qqplot_title)
+  qqline(column_data, col = "red")
+  dev.off()
+  
+  # Create a QQ plot with a uniform distribution
+  unif_qqplot_title <- paste("QQ Plot for", column_name, "with Uniform Distribution")
+  unif_qqplot_file <- paste("qq_plots/", gsub(" ", "_", unif_qqplot_title), ".png", sep="")
+  png(unif_qqplot_file, width = 8, height = 6, units = "in", res = 300)
+  theoretical_quantiles <- qunif(ppoints(length(column_data)))
+  qqplot(theoretical_quantiles, column_data, main = unif_qqplot_title)
+  dev.off()
+}
+
+
+#' Calculate the duration between the first and last air dates
+#'
+#' This function takes a data frame as input and calculates the duration between the first and last air dates.
+#' It removes rows with missing values in the "first_air_date" and "last_air_date" columns, converts the date columns to Date objects if needed,
+#' removes rows where the first air date is greater than the last air date, calculates the duration in weeks,
+#' and filters out rows with non-positive duration.
+#'
+#' @param data A data frame containing the "first_air_date" and "last_air_date" columns.
+#' @return A modified data frame with an additional "duration" column representing the duration in weeks.
+#' @examples
+#' data <- read.csv("tv_shows.csv")
+#' data <- get_duration(data)
+#' head(data)
+get_duration <- function(data) {
+  # Remove rows with missing values in "first_air_date" and "last_air_date"
+  data <- data[complete.cases(data$first_air_date) & complete.cases(data$last_air_date), ]
+  
+  # Convert date columns to Date objects if needed
+  if (!inherits(data$first_air_date, "Date")) {
+    data$first_air_date <- as.Date(data$first_air_date, format = "%Y-%m-%d", tryFormats = c("%m/%d/%y", "%m/%d/%Y"))
+  }
+  if (!inherits(data$last_air_date, "Date")) {
+    data$last_air_date <- as.Date(data$last_air_date, format = "%Y-%m-%d", tryFormats = c("%m/%d/%y", "%m/%d/%Y"))
+  }
+  
+  # Remove rows where first_air_date is greater than last_air_date
+  data <- data[data$first_air_date <= data$last_air_date, ]
+  
+  # Calculate the duration between the first and last air dates
+  data$duration <- as.numeric(difftime(data$last_air_date, data$first_air_date, units = "weeks"))
+  
+  # Filter out rows with non-positive duration
+  data <- data[data$duration > 0, ]
+  
+  return(data)
+}
+
+
+
+#' Apply Box-Cox Transformation
+#'
+#' This function applies the Box-Cox transformation to a specified column in a data frame.
+#'
+#' @param data The data frame containing the column to be transformed.
+#' @param column_name The name of the column to be transformed.
+#'
+#' @return The transformed data if successful, NULL otherwise.
+#'
+#' @details The function checks if the specified column exists in the data frame and if it contains non-positive values.
+#' If non-positive values are found, the function returns NULL and prints a message indicating that Box-Cox transformation is not suitable.
+#' If the column contains only positive values, the function applies the Box-Cox transformation and returns the transformed data.
+#' The lambda value for the optimal transformation is also printed.
+#'
+#' @examples
+#' data <- data.frame(x = c(1, 2, 3, 4, 5))
+#' apply_boxcox_transformation(data, "x")
+#'
+#' @export
+apply_boxcox_transformation <- function(data, column_name) {
+  # Check if the specified column exists in the data frame
+  stopifnot(column_name %in% names(data))
+  
+  # Extract the column data
+  column_data <- data[[column_name]]
+  column_data <- as.numeric(column_data)
+
+  # Remove non-positive values from the column
+  cleaned_col_data <- column_data[column_data > 0]
+
+  # Check if there are any remaining non-positive values
+  if (any(cleaned_col_data <= 0)) {
+    cat("The column still contains non-positive values. Box-Cox transformation is not suitable.\n")
+    return(NULL)
+  }
+  
+  # Apply Box-Cox transformation to positive values
+  lambda <- boxcox(cleaned_col_data ~ 1)$x[which.max(boxcox(cleaned_col_data ~ 1)$y)]
+  
+  # Print the Box-Cox transformation results
+  #cat("Lambda for optimal transformation:", lambda, "\n")
+  
+  # Return the transformed data if needed
+  transformed_data <- (cleaned_col_data^lambda - 1) / lambda
+  
+  # Add a new column to the data frame with the transformed data and name it as transformed_column_name
+  #transformed_column_name <- paste(column_name, "_transformed", sep = "")
+  #data[[transformed_column_name]] <- transformed_data
+  
+  # Return the transformed data in a new data frame with the same column name
+  transformed_data <- data.frame(column_name = transformed_data)
+
+  return(transformed_data)
+}
+
+
+
+#' Expand categorical columns
+#'
+#' This function takes a data frame, a categorical column, and a numerical column as input.
+#' It splits the values in the categorical column by comma and expands the data frame by duplicating rows
+#' based on the number of values in the categorical column.
+#'
+#' @param df The input data frame.
+#' @param cat_col The name of the categorical column.
+#' @param num_col The name of the numerical column.
+#'
+#' @return A new data frame with expanded categorical columns.
+#'
+#' @examples
+#' df <- data.frame(cat_col = c("A,B,C", "D,E", "F"), num_col = c(1, 2, 3))
+#' expand_categorical_cols(df, "cat_col", "num_col")
+#'
+#' @export
+expand_categorical_cols <- function(df, cat_col, num_col) {
+  num_vals <- df[[num_col]]
+  cat_vals <- trimws(unlist(strsplit(as.character(df[[cat_col]]), ",")))
+  
+  exp_df <- data.frame(num_col = rep(num_vals, lengths(strsplit(as.character(df[[cat_col]]), ","))),
+                       cat_col = cat_vals)
+  
+  return(exp_df)
 }
