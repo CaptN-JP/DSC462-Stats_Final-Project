@@ -1,0 +1,413 @@
+---
+title: "Stats Project"
+author: "Pranav"
+date: "2023-12-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(lubridate)
+source("./utils.R")
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+main_data <- read.csv("TMDB_tv_dataset_v3.csv")
+main_data
+```
+```{r}
+expand_col <- function(col) {
+  col_exp_vals = c()
+  col_vals <- unlist(strsplit(trimws(col), ","))
+  for (val in col_vals) {
+      col_exp_vals = append(col_exp_vals, trimws(val))
+  }
+  return(col_exp_vals)
+}
+
+```
+
+```{r}
+expand_col1_by_col2_col3 = function(df, col1, col2, col3){
+  col1_exp_vals <- c()
+  col2_exp_vals <- c()
+  col3_exp_vals <- c()
+  
+  for (i in 1:nrow(df)){
+    df_row <- df[i, , drop = FALSE]
+    col1_val <- df_row[[col1]]
+    if (nchar(df_row[[col2]]) > 0){
+      col2_vals <- unlist(strsplit(df_row[[col2]], ","))
+      for (col2_val in col2_vals) {
+        if (nchar(df_row[[col3]]) > 0){
+          col3_vals <- unlist(strsplit(df_row[[col3]], ","))
+          for (col3_val in col3_vals) {
+            col1_exp_vals = append(col1_exp_vals, col1_val)
+            col2_exp_vals = append(col2_exp_vals, trimws(col2_val))
+            col3_exp_vals = append(col3_exp_vals, trimws(col3_val))
+          }
+        }
+      }
+    }
+  }
+  column_names <- c(col1, col2, col3)
+  my_dataframe <- setNames(data.frame(col1_exp_vals, col2_exp_vals, col3_exp_vals), column_names)
+  return(my_dataframe)
+}
+
+test_df2 = data.frame(
+  "c1" = c(1     , 2    ,  3    , 4 , 5),
+  "c2" = c("a, b", "c"  , "i"   , "x", ""),
+  "c3" = c("d"   , "e,f", "g,h ", "", NA)
+)
+test_df2 = na.omit(test_df2)
+test_df2
+
+expand_col1_by_col2_col3(test_df2, "c1", "c2", "c3")
+```
+
+```{r}
+get_duration2 <- function(data) {
+  # Remove rows with missing values in "first_air_date" and "last_air_date"
+  data <- data[complete.cases(data$first_air_date) & complete.cases(data$last_air_date), ]
+  # Convert date columns to Date objects if needed
+  if (!inherits(data$first_air_date, "Date")) {
+    data$first_air_date <- as.Date(data$first_air_date, format="%d/%m/%Y")
+  }
+  if (!inherits(data$last_air_date, "Date")) {
+    data$last_air_date <- as.Date(data$last_air_date, format="%d/%m/%Y")
+  }
+  
+  # Remove rows where first_air_date is greater than last_air_date
+  # cat("Removing rows where first_air_date is greater than last_air_date...\n")
+  data <- data[data$first_air_date <= data$last_air_date, ]
+  
+  # Calculate the duration between the first and last air dates
+  data$duration <- as.numeric(difftime(data$last_air_date, data$first_air_date, units = "weeks"))
+  
+  # Filter out rows with non-positive duration
+  data <- data[data$duration > 0, ]
+  
+  return(data)
+}
+```
+
+
+```{r}
+expand_col1_by_col2 <- function(df, col1, col2) {
+  col1_exp_vals = c()
+  
+  col2_exp_vals = c()
+  for (i in 1:nrow(df)){
+    df_row <- df[i, , drop = FALSE]
+    col1_val <- df_row[[col1]]
+    if (nchar(df_row[[col2]]) > 1){
+      col2_vals <- unlist(strsplit(df_row[[col2]], ","))
+      
+      for (exp_val in col2_vals) {
+        
+        # print(col2_exp_vals)
+        col1_exp_vals = append(col1_exp_vals, col1_val)# append(col1_exp_vals, trimws(col1_val))
+        col2_exp_vals = append(col2_exp_vals, trimws(exp_val))# append(col2_exp_vals, trimws(col2_val))
+      }
+    }
+  }
+  column_names <- c(col1, col2)
+        
+  my_dataframe <- setNames(data.frame(col1_exp_vals, col2_exp_vals), column_names)
+  return(my_dataframe)
+}
+
+```
+
+
+Q5a
+```{r}
+original_lang_data = main_data$original_language
+total_count = length(original_lang_data)
+language_counts <- table(original_lang_data)
+english_count = language_counts["en"]
+japanese_count = language_counts["ja"]
+chinese_count = language_counts["zh"]
+korean_count = language_counts["ko"]
+other_count = total_count - english_count - japanese_count - chinese_count - korean_count
+cat("eng cnt:", english_count, "\njap cnt:", japanese_count, "\nchi cnt:", chinese_count, "\nkor cnt:", korean_count, "\noth cnt:", other_count)
+
+chisq.test(c(english_count, japanese_count, chinese_count, korean_count, other_count), p=c(0.4, 0.12, 0.09, 0.09, 0.3))
+```
+
+Q5b
+```{r}
+genre_data = main_data$genres
+clean_genre_data = na.omit(genre_data)
+
+exp_genre_data = expand_col(clean_genre_data)
+```
+
+
+```{r}
+genres_counts <- table(exp_genre_data)
+
+total_genres_dcount <- length(exp_genre_data)
+
+drama_count <- genres_counts["Drama"]
+comedy_count <- genres_counts["Comedy"]
+documentary_count <- genres_counts["Documentary"]
+actadv_count <- genres_counts["Action & Adventure"]
+other_genre_count <- total_genres_dcount - drama_count - comedy_count - documentary_count - actadv_count
+
+cat("dra cnt:", drama_count, "\ncom cnt:", comedy_count, "\ndoc cnt:", documentary_count, "\nact cnt:", actadv_count, "\noth cnt:", other_genre_count)
+chisq.test(c(drama_count, comedy_count, documentary_count, actadv_count, other_genre_count), p=c(0.3, 0.2, 0.15, 0.1, 0.25))
+
+```
+5c
+
+```{r}
+networks_data = main_data$networks
+clean_networks_data = na.omit(networks_data)
+
+exp_networks_data = expand_col(clean_networks_data)
+
+```
+
+```{r}
+exp_networks_data
+```
+
+```{r}
+networks_counts <- table(exp_networks_data)
+
+total_networks_dcount <- length(exp_networks_data)
+
+bbc_one_count <- networks_counts["BBC One"]
+netflix_count <- networks_counts["Netflix"]
+fuji_tv_count <- networks_counts["Fuji TV"]
+tv_tokyo_count <- networks_counts["TV Tokyo"]
+prime_video_count <- networks_counts["Prime Video"]
+total_networks_dcount <- total_networks_dcount - bbc_one_count - netflix_count - fuji_tv_count - tv_tokyo_count - prime_video_count
+
+cat("bbc 1 cnt:", bbc_one_count, "\nnetfl cnt:", netflix_count, "\nfujtv cnt:", fuji_tv_count, "\ntvtok cnt:", tv_tokyo_count, "\nprivd cnt:", prime_video_count, "\nother cnt:", total_networks_dcount)
+chisq.test(c(bbc_one_count, netflix_count, fuji_tv_count, tv_tokyo_count, prime_video_count, total_networks_dcount), p=c(0.08, 0.07, 0.035, 0.035, 0.03, 0.75))
+```
+
+```{r}
+head(sort(table(exp_genre_data), decreasing = T), 20)
+```
+
+
+6a
+
+```{r}
+in_prod_data = main_data$in_production
+status_data = main_data$status
+```
+
+```{r}
+contingency_table <- table(in_prod_data, status_data)
+print(contingency_table)
+result <- chisq.test(contingency_table)
+print(result)
+```
+
+
+6b
+
+```{r}
+data_6b <- main_data[, c("production_companies", "networks")]
+data_6b <- na.omit(data_6b)
+```
+
+```{r}
+exp_net_data <- expand_col1_by_col2(data_6b, "production_companies", "networks")
+exp_prod_data <- expand_col1_by_col2(exp_net_data, "networks", "production_companies")
+```
+
+```{r}
+contingency_table <- table(exp_prod_data$networks, exp_prod_data$production_companies)
+result <- chisq.test(contingency_table)
+print(result)
+```
+
+6e
+
+```{r}
+data_6e <- main_data[, c("production_countries", "origin_country")]
+data_6e <- na.omit(data_6e)
+```
+
+```{r}
+exp_prod_count <- expand_col1_by_col2(data_6e, "production_countries", "origin_country")
+```
+
+```{r}
+exp_origin_count <- expand_col1_by_col2(exp_prod_count, "origin_country", "production_countries")
+```
+
+```{r}
+contingency_table <- table(exp_origin_count$origin_country, exp_origin_count$production_countries)
+result <- chisq.test(contingency_table)
+print(result)
+```
+
+```{r}
+#table(exp_origin_count$production_countries)
+exp_origin_count
+```
+
+7a
+
+```{r}
+data_7a <- main_data[, c("vote_average", "type", "networks")]
+data_7a <- data_7a[data_7a$vote_average > 0, ]
+# data_7a <- data_7a[data_7a$type == "Scripted", ]
+data_7a
+```
+
+```{r}
+exp_net_avg
+```
+
+```{r}
+exp_net_avg <- expand_col1_by_col2(data_7a, "vote_average", "networks")
+exp_net_avg
+```
+
+```{r}
+anova_model <- aov(exp_net_avg$vote_average ~ exp_net_avg$networks)
+summary(anova_model)
+```
+
+
+```{r}
+library(ggplot2)
+```
+
+7b
+
+```{r}
+data_7b <- main_data[, c("vote_average", "production_companies", "networks")]
+data_7b <- data_7b[data_7b$vote_average > 0, ]
+data_7b
+```
+
+```{r}
+exp_vavg = expand_col1_by_col2_col3(data_7b, "vote_average", "production_companies", "networks")
+typeof(exp_vavg)
+```
+```{r}
+typeof(exp_vavg[1,1])
+```
+
+```{r}
+anova2way_model <- aov(vote_average ~ production_companies * networks, data = exp_vavg[1:500, ])
+summary(anova2way_model)
+```
+8a
+
+```{r}
+data_8a = main_data[, c("last_air_date", "first_air_date", "number_of_seasons")]
+data_8a = na.omit(data_8a)
+data_8a
+```
+
+
+```{r}
+plot(data_8a_new$duration, data_8a_new$number_of_seasons, main="Show Duration vs No of Seasons", xlab="Duration (weeks)", ylab="No of Seasons")
+```
+
+```{r}
+data_8a_new = get_duration2(data_8a)
+data_8a_new = na.omit(data_8a_new)
+data_8a_new
+```
+
+
+```{r}
+#test_data_8a = apply_boxcox_transformation(data_8a_new, "number_of_seasons")
+#test_data_8a
+```
+
+```{r}
+plot(data_8a_new$duration, data_8a_new$number_of_seasons)
+```
+
+
+```{r}
+d_Q1 = quantile(data_8a_new$duration, 0.25)
+d_Q3 = quantile(data_8a_new$duration, 0.75)
+d_IQR = d_Q3 - d_Q1
+d_upper = d_Q3 + 1.5 * d_IQR
+
+data_8a_new = data_8a_new[data_8a_new$duration <= d_upper, ]
+
+s_Q1 = quantile(data_8a_new$number_of_seasons, 0.25)
+s_Q3 = quantile(data_8a_new$number_of_seasons, 0.75)
+s_IQR = s_Q3 - s_Q1
+s_upper = s_Q3 + 1.5 * s_IQR
+s_lower = s_Q1 - 1.5 * s_IQR
+
+# data_8a_new = data_8a_new[data_8a_new$number_of_seasons <= s_upper, ]
+# data_8a_new = data_8a_new[data_8a_new$number_of_seasons >= s_lower, ]
+
+data_8a_new
+```
+
+
+```{r}
+cor.test(data_8a_new$duration, data_8a_new$number_of_seasons, exact=FALSE, method = "spearman")
+```
+9 - Regression
+
+```{r}
+linear_model <- lm(data_8a_new$number_of_seasons ~ data_8a_new$duration)
+linear_model
+```
+
+```{r}
+
+plot(data_8a_new$duration, data_8a_new$number_of_seasons, main="Show Duration vs No of Seasons", xlab="Duration (weeks)", ylab="No of Seasons")
+abline(linear_model)
+```
+
+```{r}
+# Filtering data with 10+ seasons and duration more than 1000 to capture the visible the linearity in the above plot
+test_data_8a = data_8a_new[data_8a_new$duration > 1000, ]
+test_data_8a = test_data_8a[test_data_8a$number_of_seasons > 15, ]
+test_data_8a
+```
+
+```{r}
+plot(test_data_8a$duration, test_data_8a$number_of_seasons, main="Show Duration vs No of Seasons", xlab="Duration (weeks)", ylab="No of Seasons")
+```
+
+```{r}
+cor.test(test_data_8a$duration, test_data_8a$number_of_seasons, exact=FALSE, method = "spearman")
+```
+
+```{r}
+linear_model2 <- lm(test_data_8a$number_of_seasons ~ test_data_8a$duration)
+linear_model2
+```
+
+```{r}
+plot(test_data_8a$duration, test_data_8a$number_of_seasons, main="Show Duration vs No of Seasons", xlab="Duration (weeks)", ylab="No of Seasons")
+abline(linear_model2)
+```
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
